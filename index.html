@@ -89,6 +89,7 @@
   .state-booking_gone { background: #450a0a; color: var(--red); }
   .state-starting, .state-unknown { background: #27272a; color: var(--muted); }
   .state-idle { background: #1e293b; color: var(--muted); }
+  .state-skipped { background: #27272a; color: var(--orange); }
 
   /* Schedule */
   .schedule-card { grid-column: 1 / -1; }
@@ -217,7 +218,7 @@ const STATE_LABELS = {
   sleeping:'💤 Sover', looking:'🔍 Leter', waiting:'⏳ Venter',
   booked:'✅ Booket', has_booking:'✅ Aktiv booking',
   booking_gone:'⚠️ Booking borte', starting:'🚀 Starter',
-  unknown:'❓ Ukjent', idle:'⏸ Inaktiv'
+  unknown:'❓ Ukjent', idle:'⏸ Inaktiv', skipped:'⏭️ Hoppet over'
 };
 
 let gistCache = null;
@@ -321,12 +322,21 @@ function renderShell() {
       <div class="sub" id="bookingInfo">-</div>
     </div>
     <div class="card">
-      <h2>Status</h2>
+      <h2>🎯 Mål</h2>
+      <div class="value" id="targetDate" style="color:var(--accent)">-</div>
+      <div class="sub" id="targetInfo">-</div>
+    </div>
+    <div class="card">
+      <h2>Status &amp; forsøk</h2>
       <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
         <div id="stateBadge" class="state-badge state-unknown">-</div>
       </div>
       <div class="sub" id="stateMessage" style="margin-top:0.5rem">-</div>
-      <div class="sub" id="ledigePlasser">-</div>
+      <div style="display:flex;align-items:baseline;gap:0.5rem;margin-top:0.4rem;">
+        <span style="color:var(--muted);font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Forsøk:</span>
+        <span class="value" id="attempts" style="font-size:1.3rem;">0</span>
+        <span class="sub" id="ledigePlasser" style="margin:0;">-</span>
+      </div>
     </div>
   </div>
 
@@ -382,42 +392,66 @@ function renderStatus() {
   }
 
   // Oppdateringstidspunkt
-  if (s.updated) {
-    const d = new Date(s.updated);
-    document.getElementById('lastUpdate').textContent =
-      d.toLocaleString('no-NO', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
-    // Sjekk alder
-    const ageMin = (Date.now() - d.getTime()) / 60000;
-    if (ageMin < 15) {
-      dot.className = 'dot green';
-      label.textContent = 'Aktiv';
-    } else if (ageMin < 120) {
-      dot.className = 'dot yellow';
-      label.textContent = 'Inaktiv';
-    } else {
-      dot.className = 'dot red';
-      label.textContent = 'Ikke kjørt';
+  const updated = s.updated || s.last_check || '';
+  if (updated) {
+    document.getElementById('lastUpdate').textContent = updated;
+    // Prøv å parse som ISO eller norsk format
+    let d = new Date(updated);
+    if (isNaN(d.getTime()) && updated.includes('.')) {
+      // Norsk format: DD.MM.YYYY HH:MM:SS
+      const p = updated.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/);
+      if (p) d = new Date(+p[3], +p[2]-1, +p[1], +p[4], +p[5]);
     }
-  } else if (s.last_check) {
-    document.getElementById('lastUpdate').textContent = s.last_check;
+    if (!isNaN(d.getTime())) {
+      document.getElementById('lastUpdate').textContent =
+        d.toLocaleString('no-NO', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+      const ageMin = (Date.now() - d.getTime()) / 60000;
+      if (ageMin < 15) { dot.className = 'dot green'; label.textContent = 'Aktiv'; }
+      else if (ageMin < 120) { dot.className = 'dot yellow'; label.textContent = 'Inaktiv'; }
+      else { dot.className = 'dot red'; label.textContent = 'Ikke kjørt'; }
+    }
   }
 
-  // Booking
+  // Booking-dato
   const bookEl = document.getElementById('bookingDate');
-  if (s.booking_active && s.booking_date) {
+  const bookInfo = document.getElementById('bookingInfo');
+  if (s.booking_date) {
     bookEl.textContent = s.booking_date;
+    bookInfo.textContent = s.email ? (s.skiltnummer || '') + ' / ' + (s.email || '').split('@')[0] : '';
   } else {
     bookEl.textContent = 'Ingen';
+    bookInfo.textContent = '';
   }
 
-  // State badge
-  const state = s.booking_active ? 'has_booking' : 'idle';
+  // Mål-dato
+  const targetEl = document.getElementById('targetDate');
+  const targetInfo = document.getElementById('targetInfo');
+  if (s.target_date) {
+    targetEl.textContent = s.target_date;
+    if (s.booking_date && s.target_date !== s.booking_date) {
+      targetInfo.textContent = '↔️ Booket senere dag — mål: swappe til denne';
+      targetInfo.style.color = 'var(--yellow)';
+    } else if (s.booking_date) {
+      targetInfo.textContent = '✅ Booket for måldagen';
+      targetInfo.style.color = 'var(--green)';
+    } else {
+      targetInfo.textContent = 'Leter etter ledig plass...';
+      targetInfo.style.color = 'var(--muted)';
+    }
+  } else {
+    targetEl.textContent = '-';
+    targetInfo.textContent = '';
+  }
+
+  // State badge — bruk state direkte fra boten
+  const state = s.state || 'unknown';
   const badge = document.getElementById('stateBadge');
   badge.className = 'state-badge state-' + state;
   badge.textContent = STATE_LABELS[state] || state;
 
   // Melding
   document.getElementById('stateMessage').textContent = s.message || '-';
+  document.getElementById('attempts').textContent = s.attempt || '0';
   const ledige = document.getElementById('ledigePlasser');
   ledige.textContent = (s.ledige !== null && s.ledige !== undefined)
     ? s.ledige + ' ledige plasser' : '';
