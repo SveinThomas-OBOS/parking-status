@@ -210,8 +210,6 @@
 const GIST_ID = new URLSearchParams(location.search).get('gist')
   || localStorage.getItem('parking_gist_id') || '';
 const API = `https://api.github.com/gists/${GIST_ID}`;
-const OWNER = 'SveinThomas-OBOS';
-const RAW = `https://gist.githubusercontent.com/${OWNER}/${GIST_ID}/raw`;
 const DAG_NAVN = {0:'Mandag',1:'Tirsdag',2:'Onsdag',3:'Torsdag',4:'Fredag',5:'Lørdag',6:'Søndag'};
 const DAG_SHORT = {0:'man',1:'tir',2:'ons',3:'tor',4:'fre',5:'lør',6:'søn'};
 const STATE_LABELS = {
@@ -232,6 +230,12 @@ function toast(msg) {
   setTimeout(() => el.classList.remove('show'), 2200);
 }
 function getToken() { return localStorage.getItem('gh_token') || ''; }
+function authHeaders() {
+  const t = getToken();
+  const h = { 'Accept': 'application/vnd.github+json' };
+  if (t) h['Authorization'] = `Bearer ${t}`;
+  return h;
+}
 function isoWeek(d) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
@@ -251,35 +255,33 @@ function classifyLine(l) {
 }
 
 // ── Data ──
-// Bruker raw-URL-er for lesing (ingen rate limit)
-// API brukes kun for skriving (toggle-dag)
+// Secret gist — krever GitHub token for lesing via API
 let fileCache = {};
-
-async function fetchRaw(filename) {
-  try {
-    const r = await fetch(`${RAW}/${filename}?t=${Date.now()}`, { cache: 'no-store' });
-    if (!r.ok) return null;
-    return await r.text();
-  } catch { return null; }
-}
 
 async function fetchGist() {
   if (!GIST_ID) return null;
-  // Hent alle filer parallelt via raw-URL-er
-  const [statusRaw, scheduleRaw, logRaw] = await Promise.all([
-    fetchRaw('status.json'),
-    fetchRaw('schedule.json'),
-    fetchRaw('log.txt'),
-  ]);
-  fileCache = {};
-  if (statusRaw) fileCache['status.json'] = statusRaw;
-  if (scheduleRaw) fileCache['schedule.json'] = scheduleRaw;
-  if (logRaw) fileCache['log.txt'] = logRaw;
-  // Sett også gistCache for toggleDay som trenger schedule
-  gistCache = { files: {} };
-  if (scheduleRaw) gistCache.files['schedule.json'] = { content: scheduleRaw };
-  if (logRaw) gistCache.files['log.txt'] = { content: logRaw };
-  return fileCache;
+  const token = getToken();
+  if (!token) { showTokenPrompt(); return null; }
+  try {
+    const r = await fetch(API, { headers: authHeaders(), cache: 'no-store' });
+    if (r.status === 401 || r.status === 403) {
+      localStorage.removeItem('gh_token');
+      showTokenPrompt('⚠️ Ugyldig token — logg inn på nytt');
+      return null;
+    }
+    if (r.status === 404) {
+      showTokenPrompt('⚠️ Gist ikke funnet — sjekk ID og token');
+      return null;
+    }
+    if (!r.ok) return null;
+    const data = await r.json();
+    fileCache = {};
+    gistCache = data;
+    for (const [name, info] of Object.entries(data.files || {})) {
+      fileCache[name] = info.content || '';
+    }
+    return fileCache;
+  } catch (e) { console.error('Fetch feilet:', e); return null; }
 }
 function gFile(name) {
   try { return fileCache[name] ? JSON.parse(fileCache[name]) : null; }
@@ -292,12 +294,36 @@ function showSetup() {
     <div class="card setup-card">
       <h2>🔧 Koble til</h2>
       <p class="sub" style="margin-bottom:8px">Lim inn Gist-ID for å koble dashboardet til boten:</p>
-      <input id="gistInput" placeholder="f.eks. 08eaa53ab4d208855076b40b4256f79c" />
+      <input id="gistInput" placeholder="f.eks. d69f5b839f23aaa98cc27676468d3695" />
       <button class="btn" onclick="saveSetup()">Koble til</button>
       <p class="hint">Gist-ID finner du i URL-en til din GitHub Gist</p>
     </div>`;
   document.getElementById('statusDot').className = 'dot yellow';
   document.getElementById('statusLabel').textContent = 'Ikke konfigurert';
+}
+function showTokenPrompt(message) {
+  const msg = message || '🔐 Hemmelig Gist — GitHub token kreves for tilgang';
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card setup-card">
+      <h2>🔑 Autentisering</h2>
+      <p class="sub" style="margin-bottom:8px">${msg}</p>
+      <p class="sub" style="margin-bottom:12px; font-size:0.8em; color:var(--muted)">
+        Opprett en token på <a href="https://github.com/settings/tokens?type=beta" target="_blank" style="color:var(--accent)">github.com/settings/tokens</a>
+        med <strong>gist</strong>-tilgang.
+      </p>
+      <input id="tokenInput" type="password" placeholder="ghp_... eller github_pat_..." />
+      <button class="btn" onclick="saveToken()">🔓 Logg inn</button>
+      <p class="hint" style="margin-top:12px">Token lagres kun lokalt i nettleseren</p>
+    </div>`;
+  document.getElementById('statusDot').className = 'dot yellow';
+  document.getElementById('statusLabel').textContent = 'Krever innlogging';
+}
+function saveToken() {
+  const t = document.getElementById('tokenInput').value.trim();
+  if (!t) return;
+  localStorage.setItem('gh_token', t);
+  renderShell();
+  loadAll();
 }
 function saveSetup() {
   const id = document.getElementById('gistInput').value.trim();
@@ -361,7 +387,7 @@ function renderShell() {
 </div>
 
 <div class="footer">
-  Data fra GitHub Gist · Auto-refresh hvert 30s · <a href="javascript:void(0)" onclick="clearSetup()" style="color:var(--muted)">Koble fra</a>
+  🔒 Hemmelig Gist · Auto-refresh hvert 30s · <a href="javascript:void(0)" onclick="clearSetup()" style="color:var(--muted)">Logg ut</a>
 </div>`;
 }
 
@@ -373,7 +399,7 @@ function switchTab(tab, el) {
 }
 
 function clearSetup() {
-  if (!confirm('Koble fra denne Gist-en?')) return;
+  if (!confirm('Koble fra denne Gist-en? Token og Gist-ID slettes fra nettleseren.')) return;
   localStorage.removeItem('parking_gist_id');
   localStorage.removeItem('gh_token');
   location.href = location.pathname;
@@ -524,7 +550,7 @@ async function toggleDay(weekKey, weekday, enable, el) {
   schedule.weekly_overrides = ov;
 
   const token = getToken();
-  const headers = { 'Content-Type': 'application/json' };
+  const headers = { 'Content-Type': 'application/json', 'Accept': 'application/vnd.github+json' };
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   try {
@@ -592,6 +618,9 @@ async function loadAll() {
 // ── Init ──
 if (!GIST_ID) {
   showSetup();
+} else if (!getToken()) {
+  localStorage.setItem('parking_gist_id', GIST_ID);
+  showTokenPrompt();
 } else {
   localStorage.setItem('parking_gist_id', GIST_ID);
   renderShell();
