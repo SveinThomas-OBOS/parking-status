@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="theme-color" content="#1a1a2e">
+<title>🅿️ Parkering CC</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🅿️</text></svg>">
+<style>
+  :root {
+    --bg: #1a1a2e; --card: #16213e; --accent: #0f3460;
+    --on: #4ecca3; --off: #e94560; --text: #eee; --dim: #888;
+    --radius: 12px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text);
+    padding: 16px; padding-top: env(safe-area-inset-top, 16px);
+    max-width: 480px; margin: 0 auto;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* ── Header ── */
+  .header { margin-bottom: 20px; }
+  h1 { font-size: 1.5em; margin-bottom: 2px; }
+  .subtitle { color: var(--dim); font-size: 0.85em; }
+
+  /* ── Status-kort ── */
+  .status-card {
+    background: var(--card); border-radius: var(--radius);
+    padding: 14px 16px; margin-bottom: 16px;
+  }
+  .status-card .row { display: flex; justify-content: space-between; align-items: center; }
+  .status-card .label { color: var(--dim); font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.05em; }
+  .status-card .value { font-weight: 600; font-size: 0.95em; margin-top: 4px; }
+  .status-card .time { color: var(--dim); font-size: 0.75em; }
+  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+  .status-dot.active { background: var(--on); box-shadow: 0 0 6px var(--on); }
+  .status-dot.inactive { background: var(--off); }
+
+  /* ── Uke-kort ── */
+  .week {
+    background: var(--card); border-radius: var(--radius);
+    padding: 16px; margin-bottom: 12px;
+  }
+  .week-header {
+    font-size: 1.05em; font-weight: 600; margin-bottom: 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .badge {
+    font-size: 0.65em; padding: 2px 8px; border-radius: 8px;
+    font-weight: 500;
+  }
+  .badge.override { color: var(--on); background: rgba(78,204,163,0.15); }
+  .badge.current { color: #ffd93d; background: rgba(255,217,61,0.15); }
+
+  /* ── Dag-knapper ── */
+  .days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
+  .day {
+    text-align: center; padding: 10px 4px; border-radius: 10px;
+    cursor: pointer; transition: all 0.15s ease;
+    user-select: none; -webkit-tap-highlight-color: transparent;
+    border: 2px solid transparent;
+  }
+  .day.enabled { background: rgba(78,204,163,0.2); border-color: var(--on); }
+  .day.disabled { background: rgba(233,69,96,0.08); }
+  .day.past { opacity: 0.35; pointer-events: none; }
+  .day.today { box-shadow: 0 0 0 2px rgba(255,255,255,0.6); }
+  .day:active:not(.past) { transform: scale(0.93); }
+  .day .name { font-size: 0.7em; color: var(--dim); text-transform: uppercase; letter-spacing: 0.03em; }
+  .day .date-num { font-size: 1.15em; font-weight: 700; margin: 4px 0 2px; }
+  .day .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    margin: 3px auto 0; transition: background 0.2s;
+  }
+  .day.enabled .dot { background: var(--on); }
+  .day.disabled .dot { background: var(--off); opacity: 0.5; }
+  .day.saving { opacity: 0.5; pointer-events: none; }
+
+  /* ── Knapper ── */
+  .actions { display: flex; gap: 8px; margin-top: 16px; }
+  .btn {
+    flex: 1; background: var(--accent); border: none; color: var(--text);
+    padding: 12px 16px; border-radius: 10px; font-size: 0.9em;
+    cursor: pointer; font-weight: 500; transition: opacity 0.2s;
+  }
+  .btn:active { opacity: 0.7; }
+  .btn.secondary { background: rgba(255,255,255,0.08); }
+
+  /* ── Toast ── */
+  .toast {
+    position: fixed; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+    left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--card); color: var(--text);
+    padding: 10px 20px; border-radius: 20px;
+    font-weight: 600; font-size: 0.85em;
+    opacity: 0; transition: all 0.3s ease; z-index: 100;
+    border: 1px solid rgba(255,255,255,0.1);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  /* ── Loading ── */
+  .loading { text-align: center; padding: 40px; color: var(--dim); }
+  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--dim);
+             border-top-color: var(--on); border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ── Setup-dialog ── */
+  .setup {
+    background: var(--card); border-radius: var(--radius);
+    padding: 20px; margin-top: 20px; text-align: center;
+  }
+  .setup input {
+    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
+    background: rgba(255,255,255,0.05); color: var(--text); font-size: 0.9em;
+    margin: 10px 0;
+  }
+  .setup .hint { color: var(--dim); font-size: 0.75em; margin-top: 6px; }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <h1>🅿️ Parkering</h1>
+  <p class="subtitle">Construction City — ukeplan</p>
+</div>
+
+<div class="status-card" id="statusCard">
+  <div class="label">Status</div>
+  <div class="value" id="statusText"><span class="spinner"></span></div>
+</div>
+
+<div id="content"><div class="loading"><span class="spinner"></span><br>Laster...</div></div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Konfig ──
+// Gist-ID hentes fra URL-parameter eller localStorage
+const GIST_ID = new URLSearchParams(location.search).get('gist')
+  || localStorage.getItem('parking_gist_id')
+  || '';
+const API_BASE = `https://api.github.com/gists/${GIST_ID}`;
+const DAG = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
+
+let gistCache = null;
+
+// ── Verktøy ──
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+function isoWeek(d) {
+  const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
+  const y = new Date(Date.UTC(t.getUTCFullYear(), 0, 1));
+  const w = Math.ceil(((t - y) / 86400000 + 1) / 7);
+  return `${t.getUTCFullYear()}-W${String(w).padStart(2,'0')}`;
+}
+
+function getMonday(d) {
+  const m = new Date(d);
+  const day = m.getDay() || 7;
+  m.setDate(m.getDate() - day + 1);
+  m.setHours(0,0,0,0);
+  return m;
+}
+
+function getToken() { return localStorage.getItem('gh_token') || ''; }
+
+// ── Data ──
+async function fetchGist() {
+  if (!GIST_ID) return null;
+  try {
+    const r = await fetch(API_BASE, { cache: 'no-store' });
+    if (!r.ok) return null;
+    gistCache = await r.json();
+    return gistCache;
+  } catch { return null; }
+}
+
+function parseFile(name) {
+  try { return gistCache?.files?.[name] ? JSON.parse(gistCache.files[name].content) : null; }
+  catch { return null; }
+}
+
+// ── Render ──
+async function loadAll() {
+  if (!GIST_ID) { showSetup(); return; }
+  localStorage.setItem('parking_gist_id', GIST_ID);
+  await fetchGist();
+  if (!gistCache) {
+    document.getElementById('content').innerHTML = '<div class="loading">Kunne ikke koble til — prøv igjen</div>';
+    return;
+  }
+  renderStatus();
+  renderSchedule();
+}
+
+function renderStatus() {
+  const s = parseFile('status.json');
+  const el = document.getElementById('statusText');
+  if (!s) { el.textContent = '—'; return; }
+
+  const dot = s.booking_active
+    ? '<span class="status-dot active"></span>'
+    : '<span class="status-dot inactive"></span>';
+
+  let text = s.message || 'Ukjent';
+  if (s.booking_date) text += ` — ${s.booking_date}`;
+
+  let time = '';
+  if (s.updated) {
+    const d = new Date(s.updated);
+    time = `Oppdatert ${d.toLocaleTimeString('no-NO',{hour:'2-digit',minute:'2-digit'})}`;
+  }
+
+  el.innerHTML = `${dot}${text}`;
+  if (time) {
+    const card = document.getElementById('statusCard');
+    let timeEl = card.querySelector('.time');
+    if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'time'; card.appendChild(timeEl); }
+    timeEl.textContent = time;
+  }
+}
+
+function renderSchedule() {
+  const schedule = parseFile('schedule.json');
+  const container = document.getElementById('content');
+  if (!schedule) { container.innerHTML = '<div class="loading">Ingen schedule-data</div>'; return; }
+
+  const today = new Date(); today.setHours(0,0,0,0);
+  const currentWeek = isoWeek(today);
+  const defaultDays = schedule.default_days || [0,1,2,3,4];
+  const overrides = schedule.weekly_overrides || {};
+
+  let html = '';
+  for (let wi = 0; wi < 3; wi++) {
+    const monday = getMonday(today);
+    monday.setDate(monday.getDate() + wi * 7);
+    const wk = isoWeek(monday);
+    const active = overrides[wk] || defaultDays;
+    const hasOverride = wk in overrides;
+    const isCurrent = wk === currentWeek;
+    const weekNum = parseInt(wk.split('-W')[1]);
+
+    html += `<div class="week"><div class="week-header"><span>Uke ${weekNum}</span><span>`;
+    if (isCurrent) html += '<span class="badge current">denne uka</span> ';
+    if (hasOverride) html += '<span class="badge override">tilpasset</span>';
+    html += '</span></div><div class="days">';
+
+    for (let wd = 0; wd < 5; wd++) {
+      const d = new Date(monday); d.setDate(monday.getDate() + wd);
+      const past = d < today;
+      const isToday = d.toDateString() === today.toDateString();
+      const on = active.includes(wd);
+
+      html += `<div class="day ${on?'enabled':'disabled'} ${past?'past':''} ${isToday?'today':''}"
+        ${past?'':`onclick="toggle('${wk}',${wd},${!on},this)"`}>
+        <div class="name">${DAG[wd]}</div>
+        <div class="date-num">${d.getDate()}</div>
+        <div class="dot"></div>
+      </div>`;
+    }
+    html += '</div></div>';
+  }
+
+  html += `<div class="actions">
+    <button class="btn secondary" onclick="loadAll()">🔄 Oppdater</button>
+  </div>`;
+
+  container.innerHTML = html;
+}
+
+// ── Toggle dag ──
+async function toggle(weekKey, weekday, enable, el) {
+  el.classList.add('saving');
+
+  const schedule = parseFile('schedule.json');
+  if (!schedule) { toast('❌ Feil'); el.classList.remove('saving'); return; }
+
+  const defaults = schedule.default_days || [0,1,2,3,4];
+  const ov = schedule.weekly_overrides || {};
+  let days = [...(ov[weekKey] || defaults)];
+
+  if (enable && !days.includes(weekday)) days.push(weekday);
+  if (!enable) days = days.filter(d => d !== weekday);
+  days.sort();
+
+  ov[weekKey] = days;
+  schedule.weekly_overrides = ov;
+
+  const token = getToken();
+  const headers = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  try {
+    const r = await fetch(API_BASE, {
+      method: 'PATCH', headers,
+      body: JSON.stringify({ files: { 'schedule.json': { content: JSON.stringify(schedule, null, 2) } } })
+    });
+
+    if (r.status === 401 || r.status === 403 || r.status === 404) {
+      const t = prompt('🔑 GitHub Personal Access Token kreves for å endre schedule.\n\nOpprett token på github.com/settings/tokens med "gist" scope:');
+      if (t) {
+        localStorage.setItem('gh_token', t.trim());
+        el.classList.remove('saving');
+        return toggle(weekKey, weekday, enable, el);
+      }
+      el.classList.remove('saving');
+      return;
+    }
+
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    gistCache = await r.json();
+    toast(`${DAG[weekday]} ${enable ? '✅ på' : '❌ av'}`);
+  } catch (e) {
+    console.error(e);
+    toast('❌ Kunne ikke lagre');
+  }
+
+  el.classList.remove('saving');
+  renderSchedule();
+}
+
+// ── Setup ──
+function showSetup() {
+  document.getElementById('statusText').textContent = 'Ikke konfigurert';
+  document.getElementById('content').innerHTML = `
+    <div class="setup">
+      <h2>🔧 Oppsett</h2>
+      <p style="margin-top:8px;color:var(--dim)">Lim inn Gist-ID for å koble til:</p>
+      <input id="gistInput" placeholder="f.eks. 08eaa53ab4d208855076b40b4256f79c" />
+      <button class="btn" onclick="saveGist()" style="margin-top:8px;width:100%">Koble til</button>
+      <p class="hint">Gist-ID finner du i URL-en til GitHub Gist-en din</p>
+    </div>`;
+}
+
+function saveGist() {
+  const id = document.getElementById('gistInput').value.trim();
+  if (!id) return;
+  localStorage.setItem('parking_gist_id', id);
+  location.href = `?gist=${id}`;
+}
+
+// ── Init ──
+loadAll();
+setInterval(loadAll, 30000);
+</script>
+</body>
+</html>
