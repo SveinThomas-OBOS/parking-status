@@ -322,8 +322,8 @@ function renderShell() {
 
 <div id="tab-logs" class="tab-content">
   <div class="card log-card">
-    <h2>Logg (siste hendelser)</h2>
-    <div class="log" id="logBox">Logg er kun tilgjengelig når dashboardet kjører lokalt (port 8080)</div>
+    <h2>Logg (siste 100 linjer)</h2>
+    <div class="log" id="logBox">Laster logg...</div>
   </div>
 </div>
 
@@ -504,12 +504,28 @@ async function toggleDay(weekKey, weekday, enable, el) {
   setTimeout(() => { statusEl.textContent = ''; }, 3000);
 }
 
+// ── Render logg ──
+function renderLog() {
+  const logBox = document.getElementById('logBox');
+  try {
+    const raw = gistCache?.files?.['log.txt']?.content;
+    if (!raw) { logBox.innerHTML = '<div class="line">Ingen logg tilgjengelig ennå</div>'; return; }
+    const lines = raw.split('\n').filter(l => l.trim());
+    logBox.innerHTML = lines.map(l => {
+      const cls = classifyLine(l);
+      return '<div class="line ' + cls + '">' + esc(l) + '</div>';
+    }).join('');
+    logBox.scrollTop = logBox.scrollHeight;
+  } catch { logBox.textContent = 'Kunne ikke laste logg'; }
+}
+
 // ── Load ──
 async function loadAll() {
   await fetchGist();
   if (!gistCache) return;
   renderStatus();
   renderSchedule();
+  renderLog();
 }
 
 // ── Init ──
