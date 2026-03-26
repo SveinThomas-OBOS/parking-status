@@ -5,93 +5,150 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#1a1a2e">
-<title>🅿️ Parkering CC</title>
+<meta name="theme-color" content="#0f172a">
+<title>🅿️ Parkering Dashboard</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🅿️</text></svg>">
 <style>
+  /* ── Samme tema som dashboard.py ── */
   :root {
-    --bg: #1a1a2e; --card: #16213e; --accent: #0f3460;
-    --on: #4ecca3; --off: #e94560; --text: #eee; --dim: #888;
-    --radius: 12px;
+    --bg: #0f172a; --card: #1e293b; --border: #334155;
+    --text: #e2e8f0; --muted: #94a3b8; --accent: #38bdf8;
+    --green: #4ade80; --red: #f87171; --yellow: #fbbf24; --blue: #60a5fa;
+    --orange: #fb923c;
   }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
-    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
     background: var(--bg); color: var(--text);
-    padding: 16px; padding-top: env(safe-area-inset-top, 16px);
-    max-width: 480px; margin: 0 auto;
-    min-height: 100vh;
-    -webkit-font-smoothing: antialiased;
+    min-height: 100vh; padding: 1rem 1.5rem;
+    padding-top: env(safe-area-inset-top, 1rem);
+  }
+  .header {
+    display: flex; align-items: center; gap: 1rem;
+    margin-bottom: 0.75rem; padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+  .header h1 { font-size: 1.5rem; font-weight: 600; }
+  .header .live {
+    display: flex; align-items: center; gap: 0.4rem;
+    font-size: 0.8rem; color: var(--muted);
+  }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    animation: pulse 2s infinite;
+  }
+  .dot.green { background: var(--green); }
+  .dot.red { background: var(--red); }
+  .dot.yellow { background: var(--yellow); }
+  @keyframes pulse { 0%,100%{opacity:1;} 50%{opacity:0.4;} }
+
+  /* Tabs */
+  .tab-bar {
+    display: flex; gap: 0; margin-bottom: 0.75rem;
+    border-bottom: 2px solid var(--border);
+  }
+  .tab-btn {
+    background: none; border: none; color: var(--muted);
+    padding: 0.6rem 1.2rem; font-size: 0.9rem; font-weight: 600;
+    cursor: pointer; border-bottom: 2px solid transparent;
+    margin-bottom: -2px; transition: all 0.15s;
+  }
+  .tab-btn:hover { color: var(--text); }
+  .tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+  .tab-content { display: none; }
+  .tab-content.active { display: block; }
+
+  /* Grid + kort */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 0.75rem; margin-bottom: 1rem;
+  }
+  .top-grid { grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); }
+  .card {
+    background: var(--card); border: 1px solid var(--border);
+    border-radius: 12px; padding: 1rem;
+  }
+  .card h2 {
+    font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted); margin-bottom: 0.5rem;
+  }
+  .card .value { font-size: 1.5rem; font-weight: 700; line-height: 1.2; }
+  .card .sub { font-size: 0.85rem; color: var(--muted); margin-top: 0.3rem; }
+
+  /* State badge */
+  .state-badge {
+    display: inline-flex; align-items: center; gap: 0.4rem;
+    padding: 0.3rem 0.8rem; border-radius: 20px;
+    font-size: 0.85rem; font-weight: 600;
+  }
+  .state-sleeping { background: #1e3a5f; color: var(--blue); }
+  .state-looking, .state-waiting { background: #422006; color: var(--yellow); }
+  .state-booked, .state-has_booking { background: #14532d; color: var(--green); }
+  .state-booking_gone { background: #450a0a; color: var(--red); }
+  .state-starting, .state-unknown { background: #27272a; color: var(--muted); }
+  .state-idle { background: #1e293b; color: var(--muted); }
+
+  /* Schedule */
+  .schedule-card { grid-column: 1 / -1; }
+  .week-row {
+    display: flex; align-items: center; gap: 0.5rem;
+    margin-bottom: 0.75rem; flex-wrap: wrap;
+  }
+  .week-label {
+    font-size: 0.85rem; font-weight: 700; color: var(--accent);
+    min-width: 60px;
+  }
+  .day-toggle {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 0.15rem; cursor: pointer; user-select: none;
+    padding: 0.4rem 0.5rem; border-radius: 8px;
+    border: 2px solid var(--border); background: transparent;
+    transition: all 0.15s; min-width: 52px;
+    color: var(--text);
+    -webkit-tap-highlight-color: transparent;
+  }
+  .day-toggle:hover { border-color: var(--accent); }
+  .day-toggle:active:not(.past) { transform: scale(0.93); }
+  .day-toggle.active { background: #1e3a5f; border-color: var(--accent); color: var(--accent); }
+  .day-toggle.off { background: #1c1917; border-color: #78350f; color: #fb923c; opacity: 0.7; }
+  .day-toggle.past { opacity: 0.35; pointer-events: none; }
+  .day-toggle .day-name { font-size: 0.7rem; font-weight: 600; text-transform: uppercase; }
+  .day-toggle .day-date { font-size: 0.75rem; color: var(--muted); }
+  .day-toggle.active .day-date { color: var(--accent); }
+  .day-toggle.today { box-shadow: 0 0 0 2px var(--orange); }
+  .day-toggle.saving { opacity: 0.5; pointer-events: none; }
+
+  .schedule-status {
+    font-size: 0.75rem; color: var(--muted); margin-top: 0.3rem; min-height: 1.1rem;
+  }
+  .schedule-hint {
+    font-size: 0.7rem; color: var(--muted); margin-bottom: 0.5rem; font-style: italic;
   }
 
-  /* ── Header ── */
-  .header { margin-bottom: 20px; }
-  h1 { font-size: 1.5em; margin-bottom: 2px; }
-  .subtitle { color: var(--dim); font-size: 0.85em; }
+  /* Logg */
+  .log-card { grid-column: 1 / -1; }
+  .log {
+    background: #0c0f1a; border: 1px solid var(--border);
+    border-radius: 8px; padding: 1rem;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    font-size: 0.75rem; line-height: 1.6;
+    max-height: 400px; overflow-y: auto;
+    white-space: pre-wrap; word-break: break-all;
+  }
+  .log .line { color: var(--muted); }
+  .log .line.info { color: var(--text); }
+  .log .line.warn { color: var(--yellow); }
+  .log .line.error { color: var(--red); }
+  .log .line.booking { color: var(--green); font-weight: 600; }
 
-  /* ── Status-kort ── */
-  .status-card {
-    background: var(--card); border-radius: var(--radius);
-    padding: 14px 16px; margin-bottom: 16px;
+  .footer {
+    text-align: center; color: var(--muted);
+    font-size: 0.7rem; margin-top: 0.5rem;
   }
-  .status-card .row { display: flex; justify-content: space-between; align-items: center; }
-  .status-card .label { color: var(--dim); font-size: 0.7em; text-transform: uppercase; letter-spacing: 0.05em; }
-  .status-card .value { font-weight: 600; font-size: 0.95em; margin-top: 4px; }
-  .status-card .time { color: var(--dim); font-size: 0.75em; }
-  .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
-  .status-dot.active { background: var(--on); box-shadow: 0 0 6px var(--on); }
-  .status-dot.inactive { background: var(--off); }
 
-  /* ── Uke-kort ── */
-  .week {
-    background: var(--card); border-radius: var(--radius);
-    padding: 16px; margin-bottom: 12px;
-  }
-  .week-header {
-    font-size: 1.05em; font-weight: 600; margin-bottom: 12px;
-    display: flex; justify-content: space-between; align-items: center;
-  }
-  .badge {
-    font-size: 0.65em; padding: 2px 8px; border-radius: 8px;
-    font-weight: 500;
-  }
-  .badge.override { color: var(--on); background: rgba(78,204,163,0.15); }
-  .badge.current { color: #ffd93d; background: rgba(255,217,61,0.15); }
-
-  /* ── Dag-knapper ── */
-  .days { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-  .day {
-    text-align: center; padding: 10px 4px; border-radius: 10px;
-    cursor: pointer; transition: all 0.15s ease;
-    user-select: none; -webkit-tap-highlight-color: transparent;
-    border: 2px solid transparent;
-  }
-  .day.enabled { background: rgba(78,204,163,0.2); border-color: var(--on); }
-  .day.disabled { background: rgba(233,69,96,0.08); }
-  .day.past { opacity: 0.35; pointer-events: none; }
-  .day.today { box-shadow: 0 0 0 2px rgba(255,255,255,0.6); }
-  .day:active:not(.past) { transform: scale(0.93); }
-  .day .name { font-size: 0.7em; color: var(--dim); text-transform: uppercase; letter-spacing: 0.03em; }
-  .day .date-num { font-size: 1.15em; font-weight: 700; margin: 4px 0 2px; }
-  .day .dot {
-    width: 7px; height: 7px; border-radius: 50%;
-    margin: 3px auto 0; transition: background 0.2s;
-  }
-  .day.enabled .dot { background: var(--on); }
-  .day.disabled .dot { background: var(--off); opacity: 0.5; }
-  .day.saving { opacity: 0.5; pointer-events: none; }
-
-  /* ── Knapper ── */
-  .actions { display: flex; gap: 8px; margin-top: 16px; }
-  .btn {
-    flex: 1; background: var(--accent); border: none; color: var(--text);
-    padding: 12px 16px; border-radius: 10px; font-size: 0.9em;
-    cursor: pointer; font-weight: 500; transition: opacity 0.2s;
-  }
-  .btn:active { opacity: 0.7; }
-  .btn.secondary { background: rgba(255,255,255,0.08); }
-
-  /* ── Toast ── */
+  /* Toast */
   .toast {
     position: fixed; bottom: calc(20px + env(safe-area-inset-bottom, 0px));
     left: 50%; transform: translateX(-50%) translateY(20px);
@@ -104,60 +161,74 @@
   }
   .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
 
-  /* ── Loading ── */
-  .loading { text-align: center; padding: 40px; color: var(--dim); }
-  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid var(--dim);
-             border-top-color: var(--on); border-radius: 50%; animation: spin 0.8s linear infinite; }
-  @keyframes spin { to { transform: rotate(360deg); } }
+  /* Setup */
+  .setup-card { max-width: 400px; margin: 2rem auto; text-align: center; }
+  .setup-card input {
+    width: 100%; padding: 10px; border-radius: 8px;
+    border: 1px solid var(--border); background: var(--bg);
+    color: var(--text); font-size: 0.9em; margin: 10px 0;
+  }
+  .setup-card .hint { color: var(--muted); font-size: 0.75em; margin-top: 6px; }
+  .btn {
+    background: #1d4ed8; color: #fff; border: none;
+    border-radius: 8px; padding: 0.5rem 1rem;
+    font-size: 0.9em; font-weight: 600; cursor: pointer;
+    width: 100%; margin-top: 8px;
+  }
+  .btn:active { opacity: 0.7; }
 
-  /* ── Setup-dialog ── */
-  .setup {
-    background: var(--card); border-radius: var(--radius);
-    padding: 20px; margin-top: 20px; text-align: center;
+  /* Responsive */
+  @media (max-width: 600px) {
+    body { padding: 0.75rem; }
+    .header h1 { font-size: 1.2rem; }
+    .top-grid { grid-template-columns: 1fr; }
   }
-  .setup input {
-    width: 100%; padding: 10px; border-radius: 8px; border: 1px solid rgba(255,255,255,0.2);
-    background: rgba(255,255,255,0.05); color: var(--text); font-size: 0.9em;
-    margin: 10px 0;
-  }
-  .setup .hint { color: var(--dim); font-size: 0.75em; margin-top: 6px; }
 </style>
 </head>
 <body>
 
 <div class="header">
-  <h1>🅿️ Parkering</h1>
-  <p class="subtitle">Construction City — ukeplan</p>
+  <h1>🅿️ Parkering Dashboard</h1>
+  <div class="live">
+    <span class="dot" id="statusDot"></span>
+    <span id="statusLabel">Laster...</span>
+  </div>
+  <div class="live" style="margin-left:auto;">
+    Oppdatert: <span id="lastUpdate">-</span>
+  </div>
 </div>
 
-<div class="status-card" id="statusCard">
-  <div class="label">Status</div>
-  <div class="value" id="statusText"><span class="spinner"></span></div>
+<div id="mainContent">
+  <!-- Fylles av JS etter config-sjekk -->
 </div>
-
-<div id="content"><div class="loading"><span class="spinner"></span><br>Laster...</div></div>
 
 <div class="toast" id="toast"></div>
 
 <script>
 // ── Konfig ──
-// Gist-ID hentes fra URL-parameter eller localStorage
 const GIST_ID = new URLSearchParams(location.search).get('gist')
-  || localStorage.getItem('parking_gist_id')
-  || '';
-const API_BASE = `https://api.github.com/gists/${GIST_ID}`;
-const DAG = ['Man','Tir','Ons','Tor','Fre','Lør','Søn'];
+  || localStorage.getItem('parking_gist_id') || '';
+const API = `https://api.github.com/gists/${GIST_ID}`;
+const DAG_NAVN = {0:'Mandag',1:'Tirsdag',2:'Onsdag',3:'Torsdag',4:'Fredag',5:'Lørdag',6:'Søndag'};
+const DAG_SHORT = {0:'man',1:'tir',2:'ons',3:'tor',4:'fre',5:'lør',6:'søn'};
+const STATE_LABELS = {
+  sleeping:'💤 Sover', looking:'🔍 Leter', waiting:'⏳ Venter',
+  booked:'✅ Booket', has_booking:'✅ Aktiv booking',
+  booking_gone:'⚠️ Booking borte', starting:'🚀 Starter',
+  unknown:'❓ Ukjent', idle:'⏸ Inaktiv'
+};
 
 let gistCache = null;
 
-// ── Verktøy ──
+// ── Utils ──
+function esc(s) { return (s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 function toast(msg) {
   const el = document.getElementById('toast');
   el.textContent = msg;
   el.classList.add('show');
   setTimeout(() => el.classList.remove('show'), 2200);
 }
-
+function getToken() { return localStorage.getItem('gh_token') || ''; }
 function isoWeek(d) {
   const t = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
   t.setUTCDate(t.getUTCDate() + 4 - (t.getUTCDay() || 7));
@@ -165,97 +236,195 @@ function isoWeek(d) {
   const w = Math.ceil(((t - y) / 86400000 + 1) / 7);
   return `${t.getUTCFullYear()}-W${String(w).padStart(2,'0')}`;
 }
-
 function getMonday(d) {
-  const m = new Date(d);
-  const day = m.getDay() || 7;
-  m.setDate(m.getDate() - day + 1);
-  m.setHours(0,0,0,0);
-  return m;
+  const m = new Date(d); const day = m.getDay() || 7;
+  m.setDate(m.getDate() - day + 1); m.setHours(0,0,0,0); return m;
 }
-
-function getToken() { return localStorage.getItem('gh_token') || ''; }
+function classifyLine(l) {
+  if (/booket|🎉|✅/.test(l)) return 'booking';
+  if (/ERROR|❌|feil/i.test(l)) return 'error';
+  if (/WARNING|⚠️/.test(l)) return 'warn';
+  return 'info';
+}
 
 // ── Data ──
 async function fetchGist() {
   if (!GIST_ID) return null;
   try {
-    const r = await fetch(API_BASE, { cache: 'no-store' });
+    const r = await fetch(API, { cache: 'no-store' });
     if (!r.ok) return null;
     gistCache = await r.json();
     return gistCache;
   } catch { return null; }
 }
-
-function parseFile(name) {
+function gFile(name) {
   try { return gistCache?.files?.[name] ? JSON.parse(gistCache.files[name].content) : null; }
   catch { return null; }
 }
 
-// ── Render ──
-async function loadAll() {
-  if (!GIST_ID) { showSetup(); return; }
-  localStorage.setItem('parking_gist_id', GIST_ID);
-  await fetchGist();
-  if (!gistCache) {
-    document.getElementById('content').innerHTML = '<div class="loading">Kunne ikke koble til — prøv igjen</div>';
+// ── Setup ──
+function showSetup() {
+  document.getElementById('mainContent').innerHTML = `
+    <div class="card setup-card">
+      <h2>🔧 Koble til</h2>
+      <p class="sub" style="margin-bottom:8px">Lim inn Gist-ID for å koble dashboardet til boten:</p>
+      <input id="gistInput" placeholder="f.eks. 08eaa53ab4d208855076b40b4256f79c" />
+      <button class="btn" onclick="saveSetup()">Koble til</button>
+      <p class="hint">Gist-ID finner du i URL-en til din GitHub Gist</p>
+    </div>`;
+  document.getElementById('statusDot').className = 'dot yellow';
+  document.getElementById('statusLabel').textContent = 'Ikke konfigurert';
+}
+function saveSetup() {
+  const id = document.getElementById('gistInput').value.trim();
+  if (!id) return;
+  localStorage.setItem('parking_gist_id', id);
+  location.href = `?gist=${id}`;
+}
+
+// ── Hovedinnhold ──
+function renderShell() {
+  document.getElementById('mainContent').innerHTML = `
+<div class="tab-bar">
+  <button class="tab-btn active" onclick="switchTab('dashboard',this)">Dashboard</button>
+  <button class="tab-btn" onclick="switchTab('logs',this)">Logg</button>
+</div>
+
+<div id="tab-dashboard" class="tab-content active">
+  <div class="grid top-grid">
+    <div class="card" id="bookingCard">
+      <h2>Aktiv booking</h2>
+      <div class="value" id="bookingDate">-</div>
+      <div class="sub" id="bookingInfo">-</div>
+    </div>
+    <div class="card">
+      <h2>Status</h2>
+      <div style="display:flex;align-items:center;gap:0.75rem;flex-wrap:wrap;">
+        <div id="stateBadge" class="state-badge state-unknown">-</div>
+      </div>
+      <div class="sub" id="stateMessage" style="margin-top:0.5rem">-</div>
+      <div class="sub" id="ledigePlasser">-</div>
+    </div>
+  </div>
+
+  <div class="grid" style="margin-top:-0.25rem;margin-bottom:0.5rem;">
+    <div class="card schedule-card">
+      <h2 style="display:flex;align-items:center;gap:0.75rem;">
+        📅 Ukeplan — Hvilke dager skal boten booke?
+        <button onclick="loadAll()" style="font-size:0.75rem;padding:0.2rem 0.6rem;background:transparent;border:1px solid var(--border);border-radius:6px;color:var(--muted);cursor:pointer;">↻ Oppdater</button>
+      </h2>
+      <div class="schedule-hint">Klikk på dager for å slå av/på. Endringer lagres automatisk.</div>
+      <div id="scheduleContainer">Laster ukeplan...</div>
+      <div class="schedule-status" id="scheduleStatus"></div>
+    </div>
+  </div>
+</div>
+
+<div id="tab-logs" class="tab-content">
+  <div class="card log-card">
+    <h2>Logg (siste hendelser)</h2>
+    <div class="log" id="logBox">Logg er kun tilgjengelig når dashboardet kjører lokalt (port 8080)</div>
+  </div>
+</div>
+
+<div class="footer">
+  Data fra GitHub Gist · Auto-refresh hvert 30s · <a href="javascript:void(0)" onclick="clearSetup()" style="color:var(--muted)">Koble fra</a>
+</div>`;
+}
+
+function switchTab(tab, el) {
+  document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab-' + tab).classList.add('active');
+  el.classList.add('active');
+}
+
+function clearSetup() {
+  if (!confirm('Koble fra denne Gist-en?')) return;
+  localStorage.removeItem('parking_gist_id');
+  localStorage.removeItem('gh_token');
+  location.href = location.pathname;
+}
+
+// ── Render status ──
+function renderStatus() {
+  const s = gFile('status.json');
+  const dot = document.getElementById('statusDot');
+  const label = document.getElementById('statusLabel');
+
+  if (!s) {
+    dot.className = 'dot red';
+    label.textContent = 'Ingen data';
     return;
   }
-  renderStatus();
-  renderSchedule();
-}
 
-function renderStatus() {
-  const s = parseFile('status.json');
-  const el = document.getElementById('statusText');
-  if (!s) { el.textContent = '—'; return; }
-
-  const dot = s.booking_active
-    ? '<span class="status-dot active"></span>'
-    : '<span class="status-dot inactive"></span>';
-
-  let text = s.message || 'Ukjent';
-  if (s.booking_date) text += ` — ${s.booking_date}`;
-
-  let time = '';
+  // Oppdateringstidspunkt
   if (s.updated) {
     const d = new Date(s.updated);
-    time = `Oppdatert ${d.toLocaleTimeString('no-NO',{hour:'2-digit',minute:'2-digit'})}`;
+    document.getElementById('lastUpdate').textContent =
+      d.toLocaleString('no-NO', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'});
+    // Sjekk alder
+    const ageMin = (Date.now() - d.getTime()) / 60000;
+    if (ageMin < 15) {
+      dot.className = 'dot green';
+      label.textContent = 'Aktiv';
+    } else if (ageMin < 120) {
+      dot.className = 'dot yellow';
+      label.textContent = 'Inaktiv';
+    } else {
+      dot.className = 'dot red';
+      label.textContent = 'Ikke kjørt';
+    }
+  } else if (s.last_check) {
+    document.getElementById('lastUpdate').textContent = s.last_check;
   }
 
-  el.innerHTML = `${dot}${text}`;
-  if (time) {
-    const card = document.getElementById('statusCard');
-    let timeEl = card.querySelector('.time');
-    if (!timeEl) { timeEl = document.createElement('div'); timeEl.className = 'time'; card.appendChild(timeEl); }
-    timeEl.textContent = time;
+  // Booking
+  const bookEl = document.getElementById('bookingDate');
+  if (s.booking_active && s.booking_date) {
+    bookEl.textContent = s.booking_date;
+  } else {
+    bookEl.textContent = 'Ingen';
   }
+
+  // State badge
+  const state = s.booking_active ? 'has_booking' : 'idle';
+  const badge = document.getElementById('stateBadge');
+  badge.className = 'state-badge state-' + state;
+  badge.textContent = STATE_LABELS[state] || state;
+
+  // Melding
+  document.getElementById('stateMessage').textContent = s.message || '-';
+  const ledige = document.getElementById('ledigePlasser');
+  ledige.textContent = (s.ledige !== null && s.ledige !== undefined)
+    ? s.ledige + ' ledige plasser' : '';
 }
 
+// ── Render schedule ──
 function renderSchedule() {
-  const schedule = parseFile('schedule.json');
-  const container = document.getElementById('content');
-  if (!schedule) { container.innerHTML = '<div class="loading">Ingen schedule-data</div>'; return; }
+  const schedule = gFile('schedule.json');
+  const container = document.getElementById('scheduleContainer');
+  if (!schedule) { container.innerHTML = '<p style="color:var(--muted)">Ingen schedule-data</p>'; return; }
 
   const today = new Date(); today.setHours(0,0,0,0);
-  const currentWeek = isoWeek(today);
   const defaultDays = schedule.default_days || [0,1,2,3,4];
   const overrides = schedule.weekly_overrides || {};
+  container.innerHTML = '';
 
-  let html = '';
   for (let wi = 0; wi < 3; wi++) {
     const monday = getMonday(today);
     monday.setDate(monday.getDate() + wi * 7);
     const wk = isoWeek(monday);
     const active = overrides[wk] || defaultDays;
-    const hasOverride = wk in overrides;
-    const isCurrent = wk === currentWeek;
     const weekNum = parseInt(wk.split('-W')[1]);
 
-    html += `<div class="week"><div class="week-header"><span>Uke ${weekNum}</span><span>`;
-    if (isCurrent) html += '<span class="badge current">denne uka</span> ';
-    if (hasOverride) html += '<span class="badge override">tilpasset</span>';
-    html += '</span></div><div class="days">';
+    const row = document.createElement('div');
+    row.className = 'week-row';
+
+    const label = document.createElement('span');
+    label.className = 'week-label';
+    label.textContent = 'Uke ' + weekNum;
+    row.appendChild(label);
 
     for (let wd = 0; wd < 5; wd++) {
       const d = new Date(monday); d.setDate(monday.getDate() + wd);
@@ -263,38 +432,37 @@ function renderSchedule() {
       const isToday = d.toDateString() === today.toDateString();
       const on = active.includes(wd);
 
-      html += `<div class="day ${on?'enabled':'disabled'} ${past?'past':''} ${isToday?'today':''}"
-        ${past?'':`onclick="toggle('${wk}',${wd},${!on},this)"`}>
-        <div class="name">${DAG[wd]}</div>
-        <div class="date-num">${d.getDate()}</div>
-        <div class="dot"></div>
-      </div>`;
+      const btn = document.createElement('button');
+      btn.className = 'day-toggle'
+        + (on ? ' active' : ' off')
+        + (past ? ' past' : '')
+        + (isToday ? ' today' : '');
+      btn.innerHTML = `<span class="day-name">${DAG_SHORT[wd]}</span><span class="day-date">${d.getDate()}.${d.getMonth()+1}</span>`;
+
+      if (!past) {
+        btn.onclick = () => toggleDay(wk, wd, !on, btn);
+      }
+      row.appendChild(btn);
     }
-    html += '</div></div>';
+    container.appendChild(row);
   }
-
-  html += `<div class="actions">
-    <button class="btn secondary" onclick="loadAll()">🔄 Oppdater</button>
-  </div>`;
-
-  container.innerHTML = html;
 }
 
 // ── Toggle dag ──
-async function toggle(weekKey, weekday, enable, el) {
+async function toggleDay(weekKey, weekday, enable, el) {
   el.classList.add('saving');
+  const statusEl = document.getElementById('scheduleStatus');
+  statusEl.textContent = 'Lagrer...';
 
-  const schedule = parseFile('schedule.json');
+  const schedule = gFile('schedule.json');
   if (!schedule) { toast('❌ Feil'); el.classList.remove('saving'); return; }
 
   const defaults = schedule.default_days || [0,1,2,3,4];
   const ov = schedule.weekly_overrides || {};
   let days = [...(ov[weekKey] || defaults)];
-
   if (enable && !days.includes(weekday)) days.push(weekday);
   if (!enable) days = days.filter(d => d !== weekday);
   days.sort();
-
   ov[weekKey] = days;
   schedule.weekly_overrides = ov;
 
@@ -303,57 +471,56 @@ async function toggle(weekKey, weekday, enable, el) {
   if (token) headers['Authorization'] = `Bearer ${token}`;
 
   try {
-    const r = await fetch(API_BASE, {
+    const r = await fetch(API, {
       method: 'PATCH', headers,
       body: JSON.stringify({ files: { 'schedule.json': { content: JSON.stringify(schedule, null, 2) } } })
     });
 
     if (r.status === 401 || r.status === 403 || r.status === 404) {
-      const t = prompt('🔑 GitHub Personal Access Token kreves for å endre schedule.\n\nOpprett token på github.com/settings/tokens med "gist" scope:');
+      const t = prompt('🔑 GitHub Personal Access Token kreves for å endre schedule.\n\nOpprett på github.com/settings/tokens med "gist" scope:');
       if (t) {
         localStorage.setItem('gh_token', t.trim());
         el.classList.remove('saving');
-        return toggle(weekKey, weekday, enable, el);
+        return toggleDay(weekKey, weekday, enable, el);
       }
+      statusEl.textContent = '❌ Avbrutt — token kreves';
       el.classList.remove('saving');
       return;
     }
-
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
+
     gistCache = await r.json();
-    toast(`${DAG[weekday]} ${enable ? '✅ på' : '❌ av'}`);
+    const dagNavn = DAG_SHORT[weekday] || '?';
+    statusEl.textContent = `✅ ${dagNavn.charAt(0).toUpperCase() + dagNavn.slice(1)} ${enable ? 'aktivert' : 'deaktivert'} for ${weekKey}`;
+    toast(`${DAG_SHORT[weekday]} ${enable ? '✅ på' : '❌ av'}`);
   } catch (e) {
     console.error(e);
-    toast('❌ Kunne ikke lagre');
+    statusEl.textContent = '❌ Kunne ikke lagre';
+    toast('❌ Feil');
   }
 
   el.classList.remove('saving');
   renderSchedule();
+  setTimeout(() => { statusEl.textContent = ''; }, 3000);
 }
 
-// ── Setup ──
-function showSetup() {
-  document.getElementById('statusText').textContent = 'Ikke konfigurert';
-  document.getElementById('content').innerHTML = `
-    <div class="setup">
-      <h2>🔧 Oppsett</h2>
-      <p style="margin-top:8px;color:var(--dim)">Lim inn Gist-ID for å koble til:</p>
-      <input id="gistInput" placeholder="f.eks. 08eaa53ab4d208855076b40b4256f79c" />
-      <button class="btn" onclick="saveGist()" style="margin-top:8px;width:100%">Koble til</button>
-      <p class="hint">Gist-ID finner du i URL-en til GitHub Gist-en din</p>
-    </div>`;
-}
-
-function saveGist() {
-  const id = document.getElementById('gistInput').value.trim();
-  if (!id) return;
-  localStorage.setItem('parking_gist_id', id);
-  location.href = `?gist=${id}`;
+// ── Load ──
+async function loadAll() {
+  await fetchGist();
+  if (!gistCache) return;
+  renderStatus();
+  renderSchedule();
 }
 
 // ── Init ──
-loadAll();
-setInterval(loadAll, 30000);
+if (!GIST_ID) {
+  showSetup();
+} else {
+  localStorage.setItem('parking_gist_id', GIST_ID);
+  renderShell();
+  loadAll();
+  setInterval(loadAll, 30000);
+}
 </script>
 </body>
 </html>
