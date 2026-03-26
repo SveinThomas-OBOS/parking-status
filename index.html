@@ -209,6 +209,8 @@
 const GIST_ID = new URLSearchParams(location.search).get('gist')
   || localStorage.getItem('parking_gist_id') || '';
 const API = `https://api.github.com/gists/${GIST_ID}`;
+const OWNER = 'SveinThomas-OBOS';
+const RAW = `https://gist.githubusercontent.com/${OWNER}/${GIST_ID}/raw`;
 const DAG_NAVN = {0:'Mandag',1:'Tirsdag',2:'Onsdag',3:'Torsdag',4:'Fredag',5:'Lørdag',6:'Søndag'};
 const DAG_SHORT = {0:'man',1:'tir',2:'ons',3:'tor',4:'fre',5:'lør',6:'søn'};
 const STATE_LABELS = {
@@ -248,17 +250,38 @@ function classifyLine(l) {
 }
 
 // ── Data ──
-async function fetchGist() {
-  if (!GIST_ID) return null;
+// Bruker raw-URL-er for lesing (ingen rate limit)
+// API brukes kun for skriving (toggle-dag)
+let fileCache = {};
+
+async function fetchRaw(filename) {
   try {
-    const r = await fetch(API, { cache: 'no-store' });
+    const r = await fetch(`${RAW}/${filename}?t=${Date.now()}`, { cache: 'no-store' });
     if (!r.ok) return null;
-    gistCache = await r.json();
-    return gistCache;
+    return await r.text();
   } catch { return null; }
 }
+
+async function fetchGist() {
+  if (!GIST_ID) return null;
+  // Hent alle filer parallelt via raw-URL-er
+  const [statusRaw, scheduleRaw, logRaw] = await Promise.all([
+    fetchRaw('status.json'),
+    fetchRaw('schedule.json'),
+    fetchRaw('log.txt'),
+  ]);
+  fileCache = {};
+  if (statusRaw) fileCache['status.json'] = statusRaw;
+  if (scheduleRaw) fileCache['schedule.json'] = scheduleRaw;
+  if (logRaw) fileCache['log.txt'] = logRaw;
+  // Sett også gistCache for toggleDay som trenger schedule
+  gistCache = { files: {} };
+  if (scheduleRaw) gistCache.files['schedule.json'] = { content: scheduleRaw };
+  if (logRaw) gistCache.files['log.txt'] = { content: logRaw };
+  return fileCache;
+}
 function gFile(name) {
-  try { return gistCache?.files?.[name] ? JSON.parse(gistCache.files[name].content) : null; }
+  try { return fileCache[name] ? JSON.parse(fileCache[name]) : null; }
   catch { return null; }
 }
 
@@ -490,6 +513,10 @@ async function toggleDay(weekKey, weekday, enable, el) {
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
 
     gistCache = await r.json();
+    // Oppdater cachen med ny schedule
+    if (gistCache?.files?.['schedule.json']) {
+      fileCache['schedule.json'] = gistCache.files['schedule.json'].content;
+    }
     const dagNavn = DAG_SHORT[weekday] || '?';
     statusEl.textContent = `✅ ${dagNavn.charAt(0).toUpperCase() + dagNavn.slice(1)} ${enable ? 'aktivert' : 'deaktivert'} for ${weekKey}`;
     toast(`${DAG_SHORT[weekday]} ${enable ? '✅ på' : '❌ av'}`);
@@ -508,7 +535,7 @@ async function toggleDay(weekKey, weekday, enable, el) {
 function renderLog() {
   const logBox = document.getElementById('logBox');
   try {
-    const raw = gistCache?.files?.['log.txt']?.content;
+    const raw = fileCache['log.txt'];
     if (!raw) { logBox.innerHTML = '<div class="line">Ingen logg tilgjengelig ennå</div>'; return; }
     const lines = raw.split('\n').filter(l => l.trim());
     logBox.innerHTML = lines.map(l => {
@@ -522,7 +549,7 @@ function renderLog() {
 // ── Load ──
 async function loadAll() {
   await fetchGist();
-  if (!gistCache) return;
+  if (!Object.keys(fileCache).length) return;
   renderStatus();
   renderSchedule();
   renderLog();
